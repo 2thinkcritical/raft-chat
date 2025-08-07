@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: chat-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: chatdb
+      POSTGRES_USER: chatuser
+      POSTGRES_PASSWORD: chatpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: chat-cloudflared
+    command: tunnel --url http://nginx:80
+    depends_on:
+      - nginx
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: chat-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: chat-backend
+    # Убираем прямой доступ к порту - теперь только через nginx
+    # ports:
+    #   - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ANONYMIZED_TELEMETRY=False
+      - DATABASE_URL=postgresql://chatuser:chatpass@postgres:5432/chatdb
+    volumes:
+      - ./app:/app/app
+      - vector_db_data:/app/vector_db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: chat-frontend
+    # Убираем прямой доступ к порту - теперь только через nginx
+    # ports:
+    #   - "7860:7860"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_BASE_URL=http://nginx/api
+    volumes:
+      - ./frontend:/app/frontend
+    depends_on:
+      - backend
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  vector_db_data:
+  postgres_data: 
