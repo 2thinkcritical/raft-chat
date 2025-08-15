@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import datetime
+from typing import Any
 
 import gradio as gr
 import requests
@@ -148,6 +149,37 @@ def clear_chat() -> list[list[str]]:
         return [["Система", f"Ошибка очистки истории: {str(e)}"]]
 
 
+def get_document_info() -> tuple[str, str]:
+    """
+    Получить информацию о документе с бэкенда
+
+    Returns:
+        Tuple с названием документа и названием файла
+    """
+    logger.info(
+        f"Попытка получить информацию о документе из: {API_BASE_URL}/document-info"
+    )
+    try:
+        response = requests.get(f"{API_BASE_URL}/document-info")
+        logger.info(f"Ответ от API: статус {response.status_code}")
+
+        if response.status_code == 200:
+            doc_info: dict[str, Any] = response.json()
+            logger.info(f"Получена информация о документе: {doc_info}")
+
+            document_name = str(doc_info.get("name", "Документ"))
+            filename = str(doc_info.get("filename", "unknown.pdf"))
+
+            logger.info(f"Извлечено: название='{document_name}', файл='{filename}'")
+            return document_name, filename
+        else:
+            logger.error(f"API вернул ошибку: {response.status_code} - {response.text}")
+            return "Документ", "unknown.pdf"
+    except Exception as e:
+        logger.error(f"Ошибка получения информации о документе: {e}")
+        return "Документ", "unknown.pdf"
+
+
 def create_chat_interface() -> gr.Interface:
     """
     Создать интерфейс чата с документом
@@ -156,7 +188,10 @@ def create_chat_interface() -> gr.Interface:
         Gradio интерфейс
     """
     with gr.Blocks(title="Чат с документом", theme=gr.themes.Soft()) as interface:
-        gr.Markdown("# 📄 Чат с документом")
+        # Создаем компоненты для отображения информации о документе
+        header_markdown = gr.Markdown("# 📄 Чат с документом: Загрузка...")
+        file_info_markdown = gr.Markdown("**Файл:** Загрузка...")
+
         gr.Markdown("Задайте вопрос о документе и получите ответ")
 
         # Область чата (вверху)
@@ -190,6 +225,22 @@ def create_chat_interface() -> gr.Interface:
         )
 
         clear_button.click(fn=clear_chat, outputs=[chat_area])
+
+        # Функция для загрузки информации о документе
+        def load_document_info() -> tuple[str, str]:
+            try:
+                document_name, filename = get_document_info()
+                header_text = f"# 📄 Чат с документом: {document_name}"
+                file_info_text = f"**Файл:** `{filename}`"
+                return header_text, file_info_text
+            except Exception as e:
+                logger.error(f"Ошибка получения информации о документе: {e}")
+                return "# 📄 Чат с документом: Документ", "**Файл:** `unknown.pdf`"
+
+        # Загружаем информацию о документе при запуске
+        interface.load(
+            fn=load_document_info, outputs=[header_markdown, file_info_markdown]
+        )
 
         # Загружаем историю при запуске
         interface.load(fn=load_chat_history, outputs=[chat_area])

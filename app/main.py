@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import Message as DBMessage
 from app.database import get_db, init_db
+from app.document_utils import get_pdf_info
 from app.process_question import process_question
 from app.vector_store import get_vector_db, initialize_vector_db
 
@@ -36,6 +37,11 @@ class ChatHistoryItem(BaseModel):
     bot_response: str
     timestamp: datetime
     user_id: str
+
+
+class DocumentInfo(BaseModel):
+    name: str
+    filename: str
 
 
 # Убираем хранение в памяти - теперь используем базу данных
@@ -142,6 +148,28 @@ async def clear_chat_history(db: Session = Depends(get_db)) -> dict[str, str]:
     db.query(DBMessage).delete()
     db.commit()
     return {"message": "История чата очищена"}
+
+
+@app.get("/document-info", response_model=DocumentInfo)
+async def get_document_info() -> DocumentInfo:
+    """
+    Получить информацию о загруженном документе
+    """
+    try:
+        # Путь к PDF документу
+        pdf_path = "/app/app/resources/hipaa-combined.pdf"
+
+        # Получаем реальную информацию о PDF
+        pdf_info = get_pdf_info(pdf_path)
+
+        # Возвращаем только нужные поля
+        return DocumentInfo(
+            name=pdf_info.get("name", "Unknown Document"),
+            filename=pdf_info.get("filename", "unknown.pdf"),
+        )
+    except Exception as e:
+        logger.error(f"Failed to get document info: {e}")
+        return DocumentInfo(name="Unknown Document", filename="unknown.pdf")
 
 
 @app.get("/health", response_model=dict[str, Any])

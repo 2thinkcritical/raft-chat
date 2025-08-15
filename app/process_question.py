@@ -9,6 +9,7 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain_community.vectorstores import Chroma
 
 from app.callbacks import MultiQueryLoggingCallback, QuestionLoggingCallback
+
 from .prompts import get_prompt
 
 # Загружаем переменные из .env
@@ -58,7 +59,7 @@ def process_question(
     query_prompt_text = get_prompt("multi_query_retriever")
     if query_prompt_text is None:
         raise ValueError("Не удалось загрузить промпт multi_query_retriever")
-        
+
     QUERY_PROMPT = PromptTemplate(
         input_variables=["question"],
         template=query_prompt_text,
@@ -102,7 +103,7 @@ def process_question(
     rag_prompt_text = get_prompt("rag_prompt")
     if rag_prompt_text is None:
         raise ValueError("Не удалось загрузить промпт rag_prompt")
-        
+
     RAG_PROMPT = ChatPromptTemplate.from_template(rag_prompt_text)
 
     messages = RAG_PROMPT.format_messages(context=context_str, question=question)
