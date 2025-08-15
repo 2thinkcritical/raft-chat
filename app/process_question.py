@@ -9,6 +9,7 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain_community.vectorstores import Chroma
 
 from app.callbacks import MultiQueryLoggingCallback, QuestionLoggingCallback
+from .prompts import get_prompt
 
 # Загружаем переменные из .env
 load_dotenv()
@@ -53,15 +54,14 @@ def process_question(
         callbacks=callbacks,
     )
 
-    # 2) Multi-query prompt (unchanged, just English)
+    # 2) Multi-query prompt
+    query_prompt_text = get_prompt("multi_query_retriever")
+    if query_prompt_text is None:
+        raise ValueError("Не удалось загрузить промпт multi_query_retriever")
+        
     QUERY_PROMPT = PromptTemplate(
         input_variables=["question"],
-        template=(
-            "Rewrite the question in exactly THREE distinct ways to maximise recall "
-            "in a vector search engine. Output **only** the THREE rewrites, each on "
-            "its own line — no numbering, bullets or extra text.\n\n"
-            "Original question: {question}"
-        ),
+        template=query_prompt_text,
     )
 
     # 3) Retriever with MQR
@@ -99,15 +99,11 @@ def process_question(
     logger.info(f"Context: {context_str}")
 
     # 4) RAG prompt
-    RAG_PROMPT = ChatPromptTemplate.from_template(
-        "Answer the question **using only** the context provided below. "
-        "Whenever you make a factual statement, quote the exact passage(s) from the context and present the quote in a separate paragraph. "
-        "After each quote, append the legal citation (§) and the page number(s) in square brackets, e.g., [§164.308, p.32]. "
-        "If the answer is only partially present, or the context is insufficient, clearly say so and summarize only what is found. "
-        "If the question asks **“where in the document …”** (e.g. *In which Part/Subpart is <topic> covered?*), be sure to consult the table‑of‑contents lines **and do not miss any information they contain**."
-        'If the answer is not present in the context, reply with: "I don\'t know."'
-        "\n\nContext:\n{context}\n\nQuestion: {question}"
-    )
+    rag_prompt_text = get_prompt("rag_prompt")
+    if rag_prompt_text is None:
+        raise ValueError("Не удалось загрузить промпт rag_prompt")
+        
+    RAG_PROMPT = ChatPromptTemplate.from_template(rag_prompt_text)
 
     messages = RAG_PROMPT.format_messages(context=context_str, question=question)
 

@@ -1,0 +1,5 @@
+Rewrite the question in exactly THREE distinct ways to maximise recall 
+in a vector search engine. Output **only** the THREE rewrites, each on 
+its own line — no numbering, bullets or extra text.
+
+Original question: {question}

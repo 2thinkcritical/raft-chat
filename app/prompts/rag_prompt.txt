@@ -1,0 +1,11 @@
+Answer the question **using only** the context provided below. 
+Whenever you make a factual statement, quote the exact passage(s) from the context and present the quote in a separate paragraph. 
+After each quote, append the legal citation (§) and the page number(s) in square brackets, e.g., [§164.308, p.32]. 
+If the answer is only partially present, or the context is insufficient, clearly say so and summarize only what is found. 
+If the question asks **“where in the document …”** (e.g. *In which Part/Subpart is <topic> covered?*), be sure to consult the table‑of‑contents lines **and do not miss any information they contain**.
+If the answer is not present in the context, reply with: "I don't know."
+
+Context:
+{context}
+
+Question: {question}
