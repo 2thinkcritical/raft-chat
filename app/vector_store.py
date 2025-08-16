@@ -9,6 +9,14 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
+from app.config import (
+    get_chunk_overlap,
+    get_chunk_size,
+    get_document_path,
+    get_embedding_model,
+    get_ollama_embedding_base_url,
+)
+
 # Отключаем телеметрию ChromaDB
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
@@ -119,9 +127,11 @@ def create_vector_db(pdf_path: str) -> Chroma:
         cur_meta["text"] = "\n".join(buf)
         blocks.append(cur_meta)
 
-    # ── 6. Чанкинг 1200/200 ──────────────────────────────────
+    # ── 6. Чанкинг ──────────────────────────────────
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1_200, chunk_overlap=200, separators=["\n\n", "\n", ". "]
+        chunk_size=get_chunk_size(),
+        chunk_overlap=get_chunk_overlap(),
+        separators=["\n\n", "\n", ". "],
     )
     documents = []
     for b in blocks:
@@ -135,14 +145,14 @@ def create_vector_db(pdf_path: str) -> Chroma:
 
     # ── 7. Индексация в Chroma (с persist) ─────────────────
     embeddings = OllamaEmbeddings(
-        model="mxbai-embed-large", base_url="http://host.docker.internal:11434"
+        model=get_embedding_model(), base_url=get_ollama_embedding_base_url()
     )
 
     # Создаем persistent ChromaDB
     vectordb = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
-        collection_name="hipaa_document",
+        collection_name="document",
         persist_directory=VECTOR_DB_PATH,
     )
 
@@ -168,11 +178,11 @@ def load_vector_db() -> Optional[Chroma]:
     try:
         logger.info(f"Loading vector DB from: {VECTOR_DB_PATH}")
         embeddings = OllamaEmbeddings(
-            model="mxbai-embed-large", base_url="http://host.docker.internal:11434"
+            model=get_embedding_model(), base_url=get_ollama_embedding_base_url()
         )
 
         vectordb = Chroma(
-            collection_name="hipaa_document",
+            collection_name="document",
             embedding_function=embeddings,
             persist_directory=VECTOR_DB_PATH,
         )
@@ -214,9 +224,7 @@ def initialize_vector_db() -> Chroma:
         return vector_db
 
     # Если файл не найден или поврежден, создаем новую базу
-    pdf_path = os.path.join(
-        os.path.dirname(__file__), "resources", "hipaa-combined.pdf"
-    )
+    pdf_path = get_document_path()
 
     if not os.path.exists(pdf_path):
         logger.error(f"PDF file not found: {pdf_path}")

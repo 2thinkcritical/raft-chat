@@ -1,4 +1,3 @@
-import os
 from collections.abc import Generator
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -7,13 +6,13 @@ from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.config import get_database_url
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.declarative import DeclarativeMeta
 
-# Получаем URL базы данных из переменной окружения
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://chatuser:chatpass@postgres:5432/chatdb"
-)
+# Получаем URL базы данных из конфигурации
+DATABASE_URL = get_database_url()
 
 # Создаем движок SQLAlchemy
 engine = create_engine(DATABASE_URL)

@@ -1,7 +1,5 @@
 import logging
-import os
 
-from dotenv import load_dotenv
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
 from langchain.retrievers import MultiQueryRetriever
 from langchain.schema.output_parser import StrOutputParser
@@ -9,35 +7,37 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain_community.vectorstores import Chroma
 
 from app.callbacks import MultiQueryLoggingCallback, QuestionLoggingCallback
+from app.config import (
+    get_llm_model,
+    get_llm_temperature,
+    get_openai_api_key,
+    get_search_k,
+)
 
 from .prompts import get_prompt
-
-# Загружаем переменные из .env
-load_dotenv()
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
 
-# Получаем API ключ из переменных окружения
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-
-def process_question(
-    question: str, vector_db: Chroma, selected_model: str = "gpt-4.1"
-) -> str:
+def process_question(question: str, vector_db: Chroma) -> str:
     """
     Обрабатывает вопрос пользователя с использованием RAG (Retrieval Augmented Generation).
 
     Args:
         question: Вопрос пользователя
         vector_db: Векторная база данных Chroma
-        selected_model: Модель OpenAI для использования
 
     Returns:
         str: Ответ на вопрос на основе найденных документов
     """
     logger.info("=== Starting RAG processing ===")
     logger.info(f"Original question: {question}")
+
+    # Получаем настройки LLM из конфигурации
+    selected_model = get_llm_model()
+    openai_api_key = get_openai_api_key()
+
     logger.info(f"Model: {selected_model}")
 
     # Инициализируем колбэки
@@ -49,9 +49,9 @@ def process_question(
 
     # 1) LLM for both MQR and final answer
     llm = ChatOpenAI(
-        model=selected_model,  # или gpt-4, gpt-4o и т.д.
-        temperature=0,
-        openai_api_key=OPENAI_API_KEY,
+        model=selected_model,
+        temperature=get_llm_temperature(),
+        openai_api_key=openai_api_key,
         callbacks=callbacks,
     )
 
@@ -67,7 +67,7 @@ def process_question(
 
     # 3) Retriever with MQR
     retriever = MultiQueryRetriever.from_llm(
-        vector_db.as_retriever(search_kwargs={"k": 10}),
+        vector_db.as_retriever(search_kwargs={"k": get_search_k()}),
         llm,
         prompt=QUERY_PROMPT,
         include_original=True,

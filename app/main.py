@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.config import get_document_path
 from app.database import Message as DBMessage
 from app.database import get_db, init_db
 from app.document_utils import get_pdf_info
@@ -157,7 +158,7 @@ async def get_document_info() -> DocumentInfo:
     """
     try:
         # Путь к PDF документу
-        pdf_path = "/app/app/resources/hipaa-combined.pdf"
+        pdf_path = get_document_path()
 
         # Получаем реальную информацию о PDF
         pdf_info = get_pdf_info(pdf_path)
