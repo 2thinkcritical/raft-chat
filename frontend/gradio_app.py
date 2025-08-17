@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import datetime
 from typing import Any
 
@@ -188,62 +189,112 @@ def create_chat_interface() -> gr.Interface:
         Gradio интерфейс
     """
     with gr.Blocks(title="Чат с документом", theme=gr.themes.Soft()) as interface:
-        # Создаем компоненты для отображения информации о документе
-        header_markdown = gr.Markdown("# 📄 Чат с документом: Загрузка...")
-        file_info_markdown = gr.Markdown("**Файл:** Загрузка...")
+        # View загрузки (показывается по умолчанию)
+        with gr.Column(visible=True) as loading_view:
+            gr.Markdown("### ⏳ Проверка готовности векторной базы...")
+            gr.Markdown("Пожалуйста, подождите. Это может занять несколько минут.")
 
-        gr.Markdown("Задайте вопрос о документе и получите ответ")
+        # View чата (скрыт до готовности)
+        with gr.Column(visible=False) as chat_view:
+            # Создаем компоненты для отображения информации о документе
+            header_markdown = gr.Markdown("# 📄 Чат с документом: Загрузка...")
+            file_info_markdown = gr.Markdown("**Файл:** Загрузка...")
 
-        # Область чата (вверху)
-        chat_area = gr.Chatbot(label="Чат", height=400, show_label=True)
+            gr.Markdown("Задайте вопрос о документе и получите ответ")
 
-        # Поле ввода и кнопки (внизу)
-        with gr.Row():
-            with gr.Column(scale=4):
-                # Поле ввода сообщения
-                message_input = gr.Textbox(
-                    label="Вопрос",
-                    placeholder="Задайте вопрос о документе...",
-                    lines=1,
-                    max_lines=5,
-                )
+            # Область чата (вверху)
+            chat_area = gr.Chatbot(label="Чат", height=400, show_label=True)
 
-            with gr.Column(scale=1):
-                # Кнопка отправки
-                send_button = gr.Button("Отправить", variant="primary", size="lg")
+            # Поле ввода и кнопки (внизу)
+            with gr.Row():
+                with gr.Column(scale=4):
+                    # Поле ввода сообщения
+                    message_input = gr.Textbox(
+                        label="Вопрос",
+                        placeholder="Задайте вопрос о документе...",
+                        lines=1,
+                        max_lines=5,
+                    )
 
-        # Кнопка очистки чата
-        clear_button = gr.Button("Очистить чат", variant="secondary", size="sm")
+                with gr.Column(scale=1):
+                    # Кнопка отправки
+                    send_button = gr.Button("Отправить", variant="primary", size="lg")
 
-        # Обработчики событий
-        send_button.click(
-            fn=send_message, inputs=[message_input], outputs=[message_input, chat_area]
-        )
+            # Кнопка очистки чата
+            clear_button = gr.Button("Очистить чат", variant="secondary", size="sm")
 
-        message_input.submit(
-            fn=send_message, inputs=[message_input], outputs=[message_input, chat_area]
-        )
+            # Обработчики событий
+            send_button.click(
+                fn=send_message,
+                inputs=[message_input],
+                outputs=[message_input, chat_area],
+            )
 
-        clear_button.click(fn=clear_chat, outputs=[chat_area])
+            message_input.submit(
+                fn=send_message,
+                inputs=[message_input],
+                outputs=[message_input, chat_area],
+            )
 
-        # Функция для загрузки информации о документе
-        def load_document_info() -> tuple[str, str]:
+            clear_button.click(fn=clear_chat, outputs=[chat_area])
+
+        # Функция ожидания готовности векторной базы
+        def wait_for_db() -> bool:
+            """Ожидать готовности векторной базы"""
+            while True:
+                try:
+                    response = requests.get(f"{API_BASE_URL}/health")
+                    if response.status_code == 200:
+                        health_data = response.json()
+                        if health_data.get("vector_db_status") == "initialized":
+                            return True
+                except Exception:
+                    pass
+                time.sleep(2)
+
+        # Функция переключения view после готовности базы
+        def switch_views() -> tuple[gr.update, gr.update, str, str, list[list[str]]]:
+            """Переключить view после готовности векторной базы и загрузить данные"""
+            # Ждем готовности базы
+            wait_for_db()
+
+            # Загружаем информацию о документе
             try:
                 document_name, filename = get_document_info()
                 header_text = f"# 📄 Чат с документом: {document_name}"
                 file_info_text = f"**Файл:** `{filename}`"
-                return header_text, file_info_text
             except Exception as e:
                 logger.error(f"Ошибка получения информации о документе: {e}")
-                return "# 📄 Чат с документом: Документ", "**Файл:** `unknown.pdf`"
+                header_text = "# 📄 Чат с документом: Документ"
+                file_info_text = "**Файл:** `unknown.pdf`"
 
-        # Загружаем информацию о документе при запуске
+            # Загружаем историю чата
+            try:
+                chat_history = load_chat_history()
+            except Exception as e:
+                logger.error(f"Ошибка загрузки истории чата: {e}")
+                chat_history = [["Система", "Ошибка загрузки истории чата"]]
+
+            # Возвращаем обновления для всех компонентов
+            return (
+                gr.update(visible=False),  # loading_view
+                gr.update(visible=True),  # chat_view
+                header_text,  # header_markdown
+                file_info_text,  # file_info_markdown
+                chat_history,  # chat_area
+            )
+
+        # Переключаем view и загружаем данные после готовности векторной базы
         interface.load(
-            fn=load_document_info, outputs=[header_markdown, file_info_markdown]
+            fn=switch_views,
+            outputs=[
+                loading_view,
+                chat_view,
+                header_markdown,
+                file_info_markdown,
+                chat_area,
+            ],
         )
-
-        # Загружаем историю при запуске
-        interface.load(fn=load_chat_history, outputs=[chat_area])
 
     return interface
 

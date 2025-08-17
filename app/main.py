@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
@@ -43,6 +42,14 @@ class ChatHistoryItem(BaseModel):
 class DocumentInfo(BaseModel):
     name: str
     filename: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+    timestamp: datetime
+    service: str
+    history_count: int
+    vector_db_status: str
 
 
 # Убираем хранение в памяти - теперь используем базу данных
@@ -173,19 +180,22 @@ async def get_document_info() -> DocumentInfo:
         return DocumentInfo(name="Unknown Document", filename="unknown.pdf")
 
 
-@app.get("/health", response_model=dict[str, Any])
-async def health_check(db: Session = Depends(get_db)) -> dict[str, Any]:
+@app.get("/health", response_model=HealthResponse)
+async def health_check(db: Session = Depends(get_db)) -> HealthResponse:
     vector_db_status = (
         "initialized" if get_vector_db() is not None else "not_initialized"
     )
     history_count = db.query(DBMessage).count()
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(),
-        "service": "document-chat",
-        "history_count": history_count,
-        "vector_db_status": vector_db_status,
-    }
+    logger.info(
+        f"Health check: vector_db_status={vector_db_status}, history_count={history_count}"
+    )
+    return HealthResponse(
+        status="healthy",
+        timestamp=datetime.now(),
+        service="document-chat",
+        history_count=history_count,
+        vector_db_status=vector_db_status,
+    )
 
 
 if __name__ == "__main__":
