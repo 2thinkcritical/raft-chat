@@ -52,9 +52,6 @@ class HealthResponse(BaseModel):
     vector_db_status: str
 
 
-# Убираем хранение в памяти - теперь используем базу данных
-
-
 @app.on_event("startup")
 async def startup_event() -> None:
     """

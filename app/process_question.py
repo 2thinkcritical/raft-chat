@@ -45,14 +45,14 @@ def process_question(question: str, vector_db: Chroma) -> str:
 
     callbacks = [question_callback, mqr_callback]
 
-    # 1) LLM for both MQR and final answer
+    # 1) LLM для MQR и финального ответа
     llm = ChatOpenAI(
         model=selected_model,
         temperature=get_llm_temperature(),
         callbacks=callbacks,
     )
 
-    # 2) Multi-query prompt
+    # 2) Промпт для мульти-запросов
     query_prompt_text = get_prompt("multi_query_retriever")
     if query_prompt_text is None:
         raise ValueError("Не удалось загрузить промпт multi_query_retriever")
@@ -62,7 +62,7 @@ def process_question(question: str, vector_db: Chroma) -> str:
         template=query_prompt_text,
     )
 
-    # 3) Retriever with MQR
+    # 3) Ретривер с MQR
     retriever = MultiQueryRetriever.from_llm(
         vector_db.as_retriever(search_kwargs={"k": get_search_k()}),
         llm,
@@ -70,8 +70,10 @@ def process_question(question: str, vector_db: Chroma) -> str:
         include_original=True,
     )
 
-    # -------- NEW: run retriever first → log chunks -----------------
-    docs = retriever.invoke(question, config={"callbacks": callbacks})  # list[Document]
+    # -------- НОВОЕ: сначала запускаем ретривер → логируем чанки -----------------
+    docs = retriever.invoke(
+        question, config={"callbacks": callbacks}
+    )  # список документов
 
     logger.info("Top-K chunks selected:")
     for d in docs:
@@ -80,7 +82,7 @@ def process_question(question: str, vector_db: Chroma) -> str:
         preview = d.page_content.replace("\n", " ")[:60] + "…"
         logger.info(f"  {cid:<12} {cite:<10} {preview}")
 
-    # Build context string the same way format_docs() does
+    # Строим строку контекста так же, как это делает format_docs()
     context_parts = []
     for d in docs:
         m = d.metadata
@@ -96,7 +98,7 @@ def process_question(question: str, vector_db: Chroma) -> str:
     context_str = "\n\n".join(context_parts)
     logger.info(f"Context: {context_str}")
 
-    # 4) RAG prompt
+    # 4) RAG промпт
     rag_prompt_text = get_prompt("rag_prompt")
     if rag_prompt_text is None:
         raise ValueError("Не удалось загрузить промпт rag_prompt")
@@ -110,7 +112,7 @@ def process_question(question: str, vector_db: Chroma) -> str:
     for i, message in enumerate(messages):
         logger.info(f"Message {i + 1} ({message.type}): {message.content}")
 
-    # 5) Ask LLM & parse
+    # 5) Запрашиваем LLM и парсим ответ
     raw_response = llm.invoke(messages, config={"callbacks": callbacks})
     response: str = StrOutputParser().invoke(raw_response)
 

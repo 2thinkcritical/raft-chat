@@ -32,7 +32,7 @@ class Config:
     POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
     POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 
-    # RAG настройки
+    # Настройки RAG
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "mxbai-embed-large")
     OLLAMA_EMBEDDING_BASE_URL = os.getenv(
         "OLLAMA_EMBEDDING_BASE_URL", "http://host.docker.internal:11434"
@@ -41,7 +41,7 @@ class Config:
     CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
     SEARCH_K = int(os.getenv("SEARCH_K", "10"))
 
-    # LLM настройки
+    # Настройки LLM
     LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1")
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.0"))
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
