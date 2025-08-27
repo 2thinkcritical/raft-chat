@@ -32,140 +32,167 @@ VECTOR_DB_PATH = "/app/vector_db"
 
 def create_vector_db(pdf_path: str) -> Chroma:
     """
-    Обрабатывает загруженный PDF (HIPAA), формирует
+    Обрабатывает загруженный PDF, формирует
     чанки c богатыми метаданными и строит Chroma-хранилище.
+    Логика исключительно для документа hipaa-combined.pdf
 
     Args:
         pdf_path: Путь к PDF файлу
 
     Returns:
         Chroma: векторная база, готовая к поиску.
+
+    Raises:
+        FileNotFoundError: Если PDF файл не найден
+        ValueError: Если PDF файл поврежден или пуст
+        RuntimeError: Если не удалось создать векторную базу
     """
     logger.info(f"Create vector DB from: {pdf_path}")
 
-    # ── 2. Читаем весь текст страниц через PyMuPDF ───────────
-    doc = fitz.open(pdf_path)
-    raw_pages = [p.get_text("text") for p in doc]
+    # Проверяем существование файла
+    if not os.path.exists(pdf_path):
+        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
-    # ── 3. Регэкспы для структуры ────────────────────────────
-    part_rx = re.compile(r"^PART\s+(\d{3})", re.I)
-    subpart_rx = re.compile(
-        r"^SUBPART\s+([A-Z])(?:[\s—\-:]+(.+))?", re.I
-    )  # ← ловим доп. заголовок после SUBPART X
-    header_rx = re.compile(r"^\s*§\s*(\d{3}\.\d+)\s{2,}", re.I)
+    # Проверяем, что файл не пустой
+    if os.path.getsize(pdf_path) == 0:
+        raise ValueError(f"PDF file is empty: {pdf_path}")
 
-    def is_header(line: str) -> bool:
-        return bool(header_rx.match(line.strip()))
+    doc = None
+    try:
+        # ── 1. Читаем весь текст страниц через PyMuPDF ───────────
+        doc = fitz.open(pdf_path)
+        if doc.page_count == 0:
+            raise ValueError(f"PDF file has no pages: {pdf_path}")
 
-    # ── 4. Проход: убираем TOC, строим annotated список ──────
-    state: dict[str, Optional[str]] = {
-        "part": None,
-        "subpart": None,
-        "section": None,
-        "title": None,
-    }
-    annotated = []
-    IN_TOC = False
+        raw_pages = [p.get_text("text") for p in doc]
 
-    for page_no, text in enumerate(raw_pages, 1):
-        if IN_TOC and "HIPAA Administrative Simplification Regulation Text" in text:
-            IN_TOC = False
-        if IN_TOC:
-            continue
+        # Проверяем, что получили текст
+        if not any(raw_pages):
+            raise ValueError(f"PDF file contains no text: {pdf_path}")
 
-        for line in text.splitlines():
-            if m := part_rx.match(line):
-                state["part"], state["subpart"] = m.group(1), None
-            elif m := subpart_rx.match(line):
-                state["subpart"] = m.group(1)
-                title = m.group(2)
-                if title:
-                    # Убираем лишние точки, пробелы
-                    title = re.sub(r"[\.—\-:]+", " ", title).strip()
-                    state["title"] = title
-                else:
-                    state["title"] = None
-            elif m := header_rx.match(line):
-                state["section"] = m.group(1)
-                # аккуратный заголовок после номера
-                title = line.split(None, 2)[-1]
-                title = re.sub(r"^[\s\.]+", "", title).strip()
-                state["title"] = title
-            annotated.append((page_no, state.copy(), line))
+        # ── 2. Регэкспы для структуры ────────────────────────────
+        part_rx = re.compile(r"^PART\s+(\d{3})", re.I)
+        subpart_rx = re.compile(
+            r"^SUBPART\s+([A-Z])(?:[\s—\-:]+(.+))?", re.I
+        )  # ← ловим доп. заголовок после SUBPART X
+        header_rx = re.compile(r"^\s*§\s*(\d{3}\.\d+)\s{2,}", re.I)
 
-    # ── 5. Склеиваем строки в блоки § ─────────────────────────
-    def new_meta(
-        st: dict[str, Optional[str]], pg: int, idx: int
-    ) -> dict[str, Union[str, int]]:
-        cite = f"§{st['section']}" if st["section"] else "unknown"
-        suf = st["section"].split(".")[1] if st["section"] else "xx"
-        cid = f"{st['part']}-{suf}-{idx:02d}"
-        return {
-            "part": st["part"] or "unknown",
-            "subpart": st["subpart"] or "unknown",
-            "section": st["section"] or "unknown",
-            "title": st["title"] or "unknown",
-            "page_start": pg,
-            "page_end": pg,
-            "chunk_id": cid,
-            "citation": cite,
+        def is_header(line: str) -> bool:
+            return bool(header_rx.match(line.strip()))
+
+        # ── 3. Проход: строим annotated список ─────────────────────
+        state: dict[str, Optional[str]] = {
+            "part": None,
+            "subpart": None,
+            "section": None,
+            "title": None,
         }
+        annotated = []
 
-    blocks, buf, cur_meta = [], [], None
-    for pg, st, line in annotated:
-        if cur_meta is None:
-            cur_meta = new_meta(st, pg, 0)
-        elif is_header(line) and st["section"] != cur_meta["section"]:
-            if any(s.strip() for s in buf) and cur_meta is not None:
-                cur_meta["text"] = "\n".join(buf)
-                blocks.append(cur_meta)
-            cur_meta, buf = new_meta(st, pg, 0), []
-        if cur_meta is not None:
-            buf.append(line)
-            cur_meta["page_end"] = pg
-    if any(s.strip() for s in buf) and cur_meta is not None:
-        cur_meta["text"] = "\n".join(buf)
-        blocks.append(cur_meta)
+        for page_no, text in enumerate(raw_pages, 1):
+            for line in text.splitlines():
+                if m := part_rx.match(line):
+                    state["part"], state["subpart"] = m.group(1), None
+                elif m := subpart_rx.match(line):
+                    state["subpart"] = m.group(1)
+                    title = m.group(2)
+                    if title:
+                        # Убираем лишние точки, пробелы
+                        title = re.sub(r"[\.—\-:]+", " ", title).strip()
+                        state["title"] = title
+                    else:
+                        state["title"] = None
+                elif m := header_rx.match(line):
+                    state["section"] = m.group(1)
+                    # аккуратный заголовок после номера
+                    title = line.split(None, 2)[-1]
+                    title = re.sub(r"^[\s\.]+", "", title).strip()
+                    state["title"] = title
+                annotated.append((page_no, state.copy(), line))
 
-    # ── 6. Чанкинг ──────────────────────────────────
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=get_chunk_size(),
-        chunk_overlap=get_chunk_overlap(),
-        separators=["\n\n", "\n", ". "],
-    )
-    documents = []
-    for b in blocks:
-        text = b.get("text", "")
-        if not isinstance(text, str):
-            logger.warning(f"Skipping block with non-string text: {type(text)}")
-            continue
-        for i, chunk in enumerate(splitter.split_text(text), 1):
-            meta = b.copy()
-            chunk_id = str(b["chunk_id"])
-            base = chunk_id.rsplit("-", 1)[0]  # '164-502'
-            meta["chunk_id"] = f"{base}-{i:02d}"
-            documents.append(Document(page_content=chunk, metadata=meta))
-    logger.info(f"Created {len(documents)} chunks")
+        # ── 4. Склеиваем строки в блоки § ─────────────────────────
+        def new_meta(
+            st: dict[str, Optional[str]], pg: int, idx: int
+        ) -> dict[str, Union[str, int]]:
+            cite = f"§{st['section']}" if st["section"] else "unknown"
+            suf = st["section"].split(".")[1] if st["section"] else "xx"
+            cid = f"{st['part']}-{suf}-{idx:02d}"
+            return {
+                "part": st["part"] or "unknown",
+                "subpart": st["subpart"] or "unknown",
+                "section": st["section"] or "unknown",
+                "title": st["title"] or "unknown",
+                "page_start": pg,
+                "page_end": pg,
+                "chunk_id": cid,
+                "citation": cite,
+            }
 
-    # ── 7. Индексация в Chroma (с persist) ─────────────────
-    embeddings = OllamaEmbeddings(
-        model=get_embedding_model(), base_url=get_ollama_embedding_base_url()
-    )
+        blocks, buf, cur_meta = [], [], None
+        for pg, st, line in annotated:
+            if cur_meta is None:
+                cur_meta = new_meta(st, pg, 0)
+            elif is_header(line) and st["section"] != cur_meta["section"]:
+                if any(s.strip() for s in buf) and cur_meta is not None:
+                    cur_meta["text"] = "\n".join(buf)
+                    blocks.append(cur_meta)
+                cur_meta, buf = new_meta(st, pg, 0), []
+            if cur_meta is not None:
+                buf.append(line)
+                cur_meta["page_end"] = pg
+        if any(s.strip() for s in buf) and cur_meta is not None:
+            cur_meta["text"] = "\n".join(buf)
+            blocks.append(cur_meta)
 
-    # Создаем persistent ChromaDB
-    vectordb = Chroma.from_documents(
-        documents=documents,
-        embedding=embeddings,
-        collection_name="document",
-        persist_directory=VECTOR_DB_PATH,
-    )
+        # ── 5. Чанкинг ──────────────────────────────────
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=get_chunk_size(),
+            chunk_overlap=get_chunk_overlap(),
+            separators=["\n\n", "\n", ". "],
+        )
+        documents = []
+        for b in blocks:
+            text = b.get("text", "")
+            if not isinstance(text, str):
+                logger.warning(f"Skipping block with non-string text: {type(text)}")
+                continue
+            for i, chunk in enumerate(splitter.split_text(text), 1):
+                meta = b.copy()
+                chunk_id = str(b["chunk_id"])
+                base = chunk_id.rsplit("-", 1)[0]  # '164-502'
+                meta["chunk_id"] = f"{base}-{i:02d}"
+                documents.append(Document(page_content=chunk, metadata=meta))
+        logger.info(f"Created {len(documents)} chunks")
 
-    # Сохраняем базу на диск
-    vectordb.persist()
-    logger.info(f"Vector DB saved to: {VECTOR_DB_PATH}")
+        # ── 6. Индексация в Chroma (с persist) ─────────────────
+        embeddings = OllamaEmbeddings(
+            model=get_embedding_model(), base_url=get_ollama_embedding_base_url()
+        )
 
-    logger.info("Vector DB ready")
-    return vectordb
+        # Создаем persistent ChromaDB
+        vectordb = Chroma.from_documents(
+            documents=documents,
+            embedding=embeddings,
+            collection_name="document",
+            persist_directory=VECTOR_DB_PATH,
+        )
+
+        # Сохраняем базу на диск
+        vectordb.persist()
+        logger.info(f"Vector DB saved to: {VECTOR_DB_PATH}")
+
+        logger.info("Vector DB ready")
+        return vectordb
+
+    except Exception as e:
+        logger.error(f"Failed to create vector database: {e}")
+        raise RuntimeError(f"Failed to create vector database: {e}") from e
+
+    finally:
+        # Закрываем PDF документ
+        if doc is not None:
+            doc.close()
+            logger.debug("PDF document closed")
 
 
 def load_vector_db() -> Optional[Chroma]:
