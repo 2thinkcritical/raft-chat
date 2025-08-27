@@ -1,8 +1,10 @@
 import logging
+from collections.abc import Sequence
 from typing import Any, Optional
+from uuid import UUID
 
 from langchain.callbacks.base import BaseCallbackHandler
-from langchain.schema import LLMResult
+from langchain.schema import Document, LLMResult
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,14 @@ class QuestionLoggingCallback(BaseCallbackHandler):
         """Логируем запросы к ретриверу"""
         logger.info(f"Retriever Query: {query}")
 
-    def on_retriever_end(self, documents: list[Any], **kwargs: Any) -> None:
+    def on_retriever_end(
+        self,
+        documents: Sequence[Document],
+        *,
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        **kwargs: Any,
+    ) -> None:
         """Логируем результаты ретривера"""
         logger.info(f"Retriever found {len(documents)} documents")
         for i, doc in enumerate(documents):

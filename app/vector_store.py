@@ -135,7 +135,11 @@ def create_vector_db(pdf_path: str) -> Chroma:
     )
     documents = []
     for b in blocks:
-        for i, chunk in enumerate(splitter.split_text(b["text"]), 1):
+        text = b.get("text", "")
+        if not isinstance(text, str):
+            logger.warning(f"Skipping block with non-string text: {type(text)}")
+            continue
+        for i, chunk in enumerate(splitter.split_text(text), 1):
             meta = b.copy()
             chunk_id = str(b["chunk_id"])
             base = chunk_id.rsplit("-", 1)[0]  # '164-502'

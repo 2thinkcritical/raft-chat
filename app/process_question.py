@@ -10,7 +10,6 @@ from app.callbacks import MultiQueryLoggingCallback, QuestionLoggingCallback
 from app.config import (
     get_llm_model,
     get_llm_temperature,
-    get_openai_api_key,
     get_search_k,
 )
 
@@ -36,7 +35,6 @@ def process_question(question: str, vector_db: Chroma) -> str:
 
     # Получаем настройки LLM из конфигурации
     selected_model = get_llm_model()
-    openai_api_key = get_openai_api_key()
 
     logger.info(f"Model: {selected_model}")
 
@@ -51,7 +49,6 @@ def process_question(question: str, vector_db: Chroma) -> str:
     llm = ChatOpenAI(
         model=selected_model,
         temperature=get_llm_temperature(),
-        openai_api_key=openai_api_key,
         callbacks=callbacks,
     )
 

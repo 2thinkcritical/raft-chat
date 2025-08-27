@@ -1,6 +1,6 @@
 from collections.abc import Generator
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import get_database_url
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.declarative import DeclarativeMeta
+    pass
 
 # Получаем URL базы данных из конфигурации
 DATABASE_URL = get_database_url()
@@ -21,7 +21,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Создаем базовый класс для моделей
-Base: "DeclarativeMeta" = declarative_base()
+Base: Any = declarative_base()
 
 
 class Message(Base):
