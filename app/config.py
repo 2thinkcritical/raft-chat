@@ -26,9 +26,9 @@ class Config:
     DOCUMENT_FILENAME = os.getenv("DOCUMENT_FILENAME", "hipaa-combined.pdf")
 
     # Настройки базы данных PostgreSQL
-    POSTGRES_DB = os.getenv("POSTGRES_DB", "chat_db")
-    POSTGRES_USER = os.getenv("POSTGRES_USER", "chat_user")
-    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "chat_password")
+    POSTGRES_DB = os.getenv("POSTGRES_DB", "chatdb")
+    POSTGRES_USER = os.getenv("POSTGRES_USER", "chatuser")
+    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "chatpass")
     POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
     POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 
@@ -39,7 +39,7 @@ class Config:
     )
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1200"))
     CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
-    SEARCH_K = int(os.getenv("SEARCH_K", "10"))
+    SEARCH_K = int(os.getenv("SEARCH_K", "7"))
 
     # Настройки LLM
     LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1")

@@ -2,13 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Копируем файл зависимостей
-COPY requirements.txt .
+# Устанавливаем uv
+RUN pip install --no-cache-dir uv
 
-# Устанавливаем зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+# Копируем файлы зависимостей
+COPY pyproject.toml uv.lock ./
 
-# Копируем код приложения (включая папку prompts)
+# Создаем виртуальное окружение и устанавливаем зависимости через uv
+RUN uv venv --python 3.11 && \
+    . .venv/bin/activate && \
+    uv pip install --no-cache-dir -e .
+
+# Копируем код приложения
 COPY app/ ./app/
 
 # Копируем .env файл
@@ -20,5 +25,5 @@ RUN mkdir -p /app/vector_db
 # Открываем порт
 EXPOSE 8000
 
-# Запускаем приложение
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 
+# Активируем виртуальное окружение и запускаем приложение
+CMD [".venv/bin/python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 

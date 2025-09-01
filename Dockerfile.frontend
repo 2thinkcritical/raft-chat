@@ -2,11 +2,16 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Копируем файл зависимостей
-COPY requirements.txt .
+# Устанавливаем uv
+RUN pip install --no-cache-dir uv
 
-# Устанавливаем зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+# Копируем файлы зависимостей
+COPY pyproject.toml uv.lock ./
+
+# Создаем виртуальное окружение и устанавливаем зависимости через uv
+RUN uv venv --python 3.11 && \
+    . .venv/bin/activate && \
+    uv pip install --no-cache-dir -e .
 
 # Копируем код фронтенда
 COPY frontend/ ./frontend/
@@ -14,5 +19,5 @@ COPY frontend/ ./frontend/
 # Открываем порт
 EXPOSE 7860
 
-# Запускаем Gradio приложение
-CMD ["python", "frontend/gradio_app.py"] 
+# Активируем виртуальное окружение и запускаем Gradio приложение
+CMD [".venv/bin/python", "frontend/gradio_app.py"] 

@@ -5,7 +5,7 @@
 echo "🔍 Проверка кода с помощью ruff..."
 
 # Активируем виртуальное окружение
-source venv/bin/activate
+source .venv/bin/activate
 
 # Проверяем, установлен ли ruff
 if ! command -v ruff &> /dev/null; then

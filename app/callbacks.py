@@ -1,6 +1,5 @@
 import logging
-from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 from uuid import UUID
 
 from langchain.callbacks.base import BaseCallbackHandler
@@ -41,7 +40,7 @@ class QuestionLoggingCallback(BaseCallbackHandler):
         self,
         documents: Sequence[Document],
         *,
-        run_id: UUID,
+        run_id: Optional[UUID] = None,
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> None:

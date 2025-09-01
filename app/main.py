@@ -135,10 +135,10 @@ async def get_chat_history(db: Session = Depends(get_db)) -> list[ChatHistoryIte
     history_items = []
     for db_msg in db_messages:
         history_item = ChatHistoryItem(
-            user_message=db_msg.user_message,
-            bot_response=db_msg.bot_response,
+            user_message=str(db_msg.user_message),
+            bot_response=str(db_msg.bot_response),
             timestamp=db_msg.timestamp,
-            user_id=db_msg.user_id,
+            user_id=str(db_msg.user_id),
         )
         history_items.append(history_item)
 
